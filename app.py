@@ -42,7 +42,7 @@ class Player(db.Model):
     name = db.Column(db.String(80), nullable=False)
     team = db.Column(db.String(80), default="个人")
     tournament_id = db.Column(db.Integer, db.ForeignKey('tournament.id'), nullable=False)
-    
+    player_number = db.Column(db.Integer, nullable=False)
     # 作为选手的比赛结果
     player_results = db.relationship('PlayerResult', 
                                     back_populates='player', 
@@ -320,7 +320,18 @@ def tournament_dashboard(tournament_id):
                          players=players,
                          rounds=rounds,
                          tiebreak_rules=tiebreak_rules)
-
+def find_min_available_number(tournament_id):
+    # 获取当前比赛所有已使用的选手编号
+    used_numbers = {p.player_number for p in Player.query.filter_by(
+        tournament_id=tournament_id
+    ).all()}
+    
+    # 查找最小空缺编号
+    min_num = 1
+    while min_num in used_numbers:
+        min_num += 1
+    
+    return min_num
 @app.route('/tournament/<int:tournament_id>/players', methods=['GET', 'POST'])
 def manage_players(tournament_id):
     tournament = Tournament.query.get_or_404(tournament_id)
@@ -350,8 +361,15 @@ def manage_players(tournament_id):
             
             if not name:
                 name = f"选手{len(tournament.players) + 1}"
-            
-            new_player = Player(name=name, team=team, tournament_id=tournament_id)
+            # 获取最小可用编号
+            new_number = find_min_available_number(tournament_id)
+        
+            new_player = Player(
+                name=name,
+                team=team,
+                tournament_id=tournament_id,
+                player_number=new_number  # 使用最小空缺编号
+            )
             db.session.add(new_player)
             db.session.commit()
             flash('选手已添加', 'success')
